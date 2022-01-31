@@ -100,10 +100,26 @@ export class BlackholeAccount implements OnInit, OnDestroy {
   @ViewChild('stepper') stepper: MatStepper;
 
   async ngOnInit() {
+    this.loadingData = true;
+
     this.ottReceived = this.ottChanged.subscribe(async ottData => {
       //console.log("ottReceived: " + JSON.stringify(ottData));
 
-      this.loadFeeReserves();
+      await this.loadFeeReserves();
+      let fixAmounts:any = await this.xummService.getFixAmounts();
+
+      if(fixAmounts && fixAmounts["*"]) {
+        let amount = fixAmounts["*"];
+
+        if(amount && !amount.issuer) {
+          let blackholeAmount:number = Number(fixAmounts["*"]);
+          this.paymentAmount = blackholeAmount / 1000000;
+          this.paymentCurrency = "XRP"
+        } else if(amount && amount.issuer) {
+          this.paymentAmount = amount.value;
+          this.paymentCurrency = amount.currency;
+        }
+      }
 
       if(ottData) {
 
@@ -116,10 +132,12 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         if(ottData && ottData.account && ottData.accountaccess == 'FULL') {
 
           await this.loadAccountData(ottData.account);
+          this.issuerAccount = ottData.account;
           this.loadingData = false;
 
           //await this.loadAccountData(ottData.account); //false = ottResponse.node == 'TESTNET' 
         } else {
+          this.loadingData = false;
           this.issuer_account_info = "no account";
         }
       }
@@ -178,6 +196,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
     //this.infoLabel = "Opening sign request";
     let xummResponse:XummTypes.XummPostPayloadResponse;
     try {
+        payloadRequest.options.pushDisabled = true;
         payloadRequest.payload.options = {
           expire: 2,
           forceAccount: isValidXRPAddress(payloadRequest.payload.txjson.Account+"")
@@ -273,18 +292,6 @@ export class BlackholeAccount implements OnInit, OnDestroy {
           this.snackBar.open("Blackhole account changed!", null, {panelClass: 'snackbar-success', duration: 3000, horizontalPosition: 'center', verticalPosition: 'top'});
           this.issuerAccount = transactionResult.account;
           this.validIssuer = true;
-  
-          //load balance data
-          let accountLinesCommand:any = {
-            command: "account_lines",
-            account: transactionResult.account,
-            ledger_index: "validated"
-          }
-  
-          let accountLines:any = await this.xrplWebSocket.getWebsocketMessage('blackhole_component_2', accountLinesCommand, this.isTestMode);
-          //console.log("accountLines: " + JSON.stringify(accountLines));
-          
-          this.hasTokenBalance = accountLines && accountLines.result && accountLines.result.lines && accountLines.result.lines.length > 0 && accountLines.result.lines.filter(line => Number(line.balance) > 0).length > 0;
   
           await this.loadAccountData(this.issuerAccount);
   
@@ -442,6 +449,8 @@ export class BlackholeAccount implements OnInit, OnDestroy {
 
             this.hasSignerList = message.result.account_data.signer_lists && message.result.account_data.signer_lists.length > 0;
 
+            this.validIssuer = true;
+
             //console.log("Balance: " + this.getAvailableBalanceIssuer());
             //console.log("blackholeDisallowXrp: " + this.blackholeDisallowXrp);
             //console.log("blackholeMasterDisabled: " + this.blackholeMasterDisabled);
@@ -460,6 +469,18 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         this.issuer_account_info = null;
         this.blackholeMasterDisabled = false;
       }
+
+      //load balance data
+      let accountLinesCommand:any = {
+        command: "account_lines",
+        account: xrplAccount,
+        ledger_index: "validated"
+      }
+
+      let accountLines:any = await this.xrplWebSocket.getWebsocketMessage('blackhole_component_2', accountLinesCommand, this.isTestMode);
+      //console.log("accountLines: " + JSON.stringify(accountLines));
+      
+      this.hasTokenBalance = accountLines && accountLines.result && accountLines.result.lines && accountLines.result.lines.length > 0 && accountLines.result.lines.filter(line => Number(line.balance) > 0).length > 0;
     }
   }
 
@@ -492,6 +513,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
   }
 
   async sendRemainingXRP() {
+    this.loadingData = true;
     try {
       let genericBackendRequest:GenericBackendPostRequest = {
         options: {
@@ -528,6 +550,8 @@ export class BlackholeAccount implements OnInit, OnDestroy {
       this.handleError(err);
     }
 
+    this.loadingData = false;
+
   }
 
   async disallowIncomingXrp() {
@@ -541,6 +565,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         },
         payload: {
           txjson: {
+            Account: this.getIssuer(),
             TransactionType: "AccountSet",
             SetFlag: this.ACCOUNT_FLAG_DISABLE_INCOMING_XRP
           },
@@ -581,6 +606,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         },
         payload: {
           txjson: {
+            Account: this.getIssuer(),
             TransactionType: "SetRegularKey",
             RegularKey: "rrrrrrrrrrrrrrrrrrrrBZbvji"
           },
@@ -620,6 +646,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         },
         payload: {
           txjson: {
+            Account: this.getIssuer(),
             TransactionType: "AccountSet",
             SetFlag: this.ACCOUNT_FLAG_DISABLE_MASTER_KEY
           },
@@ -661,6 +688,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         },
         payload: {
           txjson: {
+            Account: this.getIssuer(),
             TransactionType: "SignerListSet",
             SignerQuorum: 0
           },
