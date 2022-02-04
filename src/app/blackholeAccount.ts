@@ -385,7 +385,10 @@ export class BlackholeAccount implements OnInit, OnDestroy {
             Memos : [{Memo: {MemoType: Buffer.from("[https://xrpl.services]-Memo", 'utf8').toString('hex').toUpperCase(), MemoData: Buffer.from("Payment to blackhole XRPL account via xApp.", 'utf8').toString('hex').toUpperCase()}}]
           },
           custom_meta: {
-            instruction: "Please pay with the account you want to remove all access for!"
+            instruction: "Please pay with the account you want to remove all access for!",
+            blob: {
+              purpose: "Blackhole Account Service"
+            }
           }
         }
       } 
