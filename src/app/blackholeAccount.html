@@ -39,7 +39,7 @@
               We will charge you {{paymentAmount}} {{paymentCurrency}} for using this service.
             </mat-card>
 
-            <label>The payment is a ONE TIME PAYMENT. So if you pay and then close the website, you would need to pay again!</label><br/>
+            <label>The payment is a ONE TIME PAYMENT. So if you pay and then close the app, you would need to pay again!</label><br/>
             <label>Click 'Next' and follow the instructions if you are ready and you know what your are doing!</label>
             <div>
               <button mat-raised-button color="primary" (click)="moveNext()">Next</button>
@@ -161,7 +161,7 @@
         <mat-card class="mat-card-orange">
           <label>You are going to "black hole" your account. That means you would not be able to issue more tokens (fixed supply) AND you would lose ALL access to your account!</label>
         </mat-card>
-        <div *ngIf="!blackholeMasterDisabled">
+        <div *ngIf="!blackholeDisallowXrp || !blackholeRegularKeySet || !blackholeMasterDisabled">
           <mat-checkbox [(ngModel)]="checkBoxBlackhole1" [ngClass]="(checkBoxBlackhole1 ? 'xumm-green': 'xumm-red')">I understand the implications and want to black hole my account.</mat-checkbox>
           <mat-checkbox [(ngModel)]="checkBoxBlackhole2" [ngClass]="(checkBoxBlackhole2 ? 'xumm-green': 'xumm-red')">In case of an Issuer account: I understand that I can not create more tokens. The supply of my Token will be fixed.</mat-checkbox>
           <mat-checkbox [(ngModel)]="checkBoxBlackhole3" [ngClass]="(checkBoxBlackhole3 ? 'xumm-green': 'xumm-red')">I understand that I will lose access to the account: {{getIssuer()}}. I WON'T BE ABLE TO RECOVER THE ACCESS!</mat-checkbox>
