@@ -198,8 +198,11 @@ export class BlackholeAccount implements OnInit, OnDestroy {
     try {
         payloadRequest.options.pushDisabled = true;
         payloadRequest.payload.options = {
-          expire: 2,
-          signers:[payloadRequest.payload.txjson.Account+""]
+          expire: 2
+        }
+
+        if(isValidXRPAddress(payloadRequest.payload.txjson.Account+"")) {
+          payloadRequest.payload.options.signers = [payloadRequest.payload.txjson.Account+""];
         }
 
         //console.log("sending xumm payload: " + JSON.stringify(xummPayload));
