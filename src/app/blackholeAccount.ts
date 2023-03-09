@@ -9,7 +9,7 @@ import { XummService } from 'src/app/services/xumm.service';
 import { TypeWriter } from './utils/TypeWriter';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { XummTypes } from 'xumm-sdk';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatLegacySnackBar as MatSnackBar } from '@angular/material/legacy-snack-bar';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import * as clipboard from 'copy-to-clipboard';
 
@@ -199,7 +199,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         payloadRequest.options.pushDisabled = true;
         payloadRequest.payload.options = {
           expire: 2,
-          forceAccount: isValidXRPAddress(payloadRequest.payload.txjson.Account+"")
+          signers:[payloadRequest.payload.txjson.Account+""]
         }
 
         //console.log("sending xumm payload: " + JSON.stringify(xummPayload));
