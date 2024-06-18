@@ -10,7 +10,6 @@ import { TypeWriter } from './utils/TypeWriter';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { XummTypes } from 'xumm-sdk';
 import { MatLegacySnackBar as MatSnackBar } from '@angular/material/legacy-snack-bar';
-import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import * as clipboard from 'copy-to-clipboard';
 
 @Component({
@@ -37,8 +36,6 @@ export class BlackholeAccount implements OnInit, OnDestroy {
 
   private ottReceived: Subscription;
   private themeReceived: Subscription;
-
-  websocket: WebSocketSubject<any>;
 
   checkBoxTwoAccounts:boolean = false;
   checkBoxIssuerInfo:boolean = false;
@@ -95,6 +92,8 @@ export class BlackholeAccount implements OnInit, OnDestroy {
   themeClass = 'dark-theme';
   backgroundColor = '#000000';
 
+  fixAmounts:any = null;
+
   errorLabel:string = null;
 
   @ViewChild('stepper') stepper: MatStepper;
@@ -124,6 +123,8 @@ export class BlackholeAccount implements OnInit, OnDestroy {
       if(ottData) {
 
         //this.infoLabel = JSON.stringify(ottData);
+
+        this.fixAmounts = await this.xummService.getFixAmounts();
         
         this.isTestMode = ottData.nodetype == 'TESTNET';
 
@@ -162,15 +163,6 @@ export class BlackholeAccount implements OnInit, OnDestroy {
       this.overlayContainer.getContainerElement().classList.add(this.themeClass);
     });
     //this.infoLabel = JSON.stringify(this.device.getDeviceInfo());
-
-    //add event listeners
-    if (typeof window.addEventListener === 'function') {
-      window.addEventListener("message", event => this.handleOverlayEvent(event));
-    }
-    
-    if (typeof document.addEventListener === 'function') {
-      document.addEventListener("message", event => this.handleOverlayEvent(event));
-    }
 
     this.tw = new TypeWriter(["XRPL Services xApp", "created by nixerFFM", "XRPL Services xApp"], t => {
       this.title = t;
@@ -232,29 +224,43 @@ export class BlackholeAccount implements OnInit, OnDestroy {
     //remove old websocket
     try {
 
-      if(this.websocket && !this.websocket.closed) {
-        this.websocket.unsubscribe();
-        this.websocket.complete();
-      }
+      return new Promise( async (resolve, reject) => {
 
-      return new Promise( (resolve, reject) => {
+        //use event listeners over websockets
+        if(typeof window.addEventListener === 'function') {
+          window.addEventListener("message", event => {
+            try {
+              if(event && event.data) {
+                let eventData = JSON.parse(event.data);
+        
+                console.log("WINDOW: " + eventData);
 
-        this.websocket = webSocket(xummResponse.refs.websocket_status);
-        this.websocket.asObservable().subscribe(async message => {
-            //console.log("message received: " + JSON.stringify(message));
-            //this.infoLabel = "message received: " + JSON.stringify(message);
+                if(eventData && eventData.method == "payloadResolved") {
 
-            if((message.payload_uuidv4 && message.payload_uuidv4 === xummResponse.uuid) || message.expired || message.expires_in_seconds <= 0) {
+                  window.removeAllListeners("message");
 
-              if(this.websocket) {
-                this.websocket.unsubscribe();
-                this.websocket.complete();
+                  if(eventData.reason == "SIGNED") {
+                    //create own response
+                    let message = {
+                      signed: true,
+                      payload_uuidv4: eventData.uuid
+                    }
+                    
+                    resolve(message);
+
+                  } else if(eventData.reason == "DECLINED") {
+                    //user closed without signing
+                    resolve(null)
+                  }
+                }
               }
-              
-              return resolve(message);
+            } catch(err) {
+              //ignore errors
             }
-        });
+          });
+        }
       });
+
     } catch(err) {
       this.loadingData = false;
       //this.infoLabel = JSON.stringify(err);
@@ -291,7 +297,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         //check if we are an EscrowReleaser payment
         transactionResult = await this.xummService.checkSignIn(message.payload_uuidv4);
 
-        if(transactionResult && transactionResult.success && transactionResult.account && isValidXRPAddress(transactionResult.account)) {
+        if(this.issuerAccount && transactionResult && transactionResult.success && transactionResult.account && isValidXRPAddress(transactionResult.account)) {
           this.snackBar.open("Blackhole account changed!", null, {panelClass: 'snackbar-success', duration: 3000, horizontalPosition: 'center', verticalPosition: 'top'});
           this.issuerAccount = transactionResult.account;
           this.validIssuer = true;
@@ -385,7 +391,10 @@ export class BlackholeAccount implements OnInit, OnDestroy {
           txjson: {
             Account: this.getIssuer(),
             TransactionType: "Payment",
-            Memos : [{Memo: {MemoType: Buffer.from("[https://xrpl.services]-Memo", 'utf8').toString('hex').toUpperCase(), MemoData: Buffer.from("Payment to blackhole XRPL account via xApp.", 'utf8').toString('hex').toUpperCase()}}]
+            Memos : [
+              {Memo: {MemoType: Buffer.from("[https://xrpl.services]-Memo", 'utf8').toString('hex').toUpperCase(), MemoData: Buffer.from("Payment to blackhole XRPL account via xApp.", 'utf8').toString('hex').toUpperCase()}},
+              {Memo: {MemoType: Buffer.from("Blackhole-Info", 'utf8').toString('hex').toUpperCase(), MemoData: Buffer.from(JSON.stringify({account: this.getIssuer().trim()}) , 'utf8').toString('hex').toUpperCase()}}
+            ]
           },
           custom_meta: {
             instruction: "Please pay with the account you want to remove all access for!",
@@ -419,10 +428,11 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         this.snackBar.open("Payment not successful!", null, {panelClass: 'snackbar-failed', duration: 3000, horizontalPosition: 'center', verticalPosition: 'top'});
       }
 
-      this.loadingData = false;
     } catch(err) {
       this.handleError(err);
     }
+
+    this.loadingData = false;
   }
 
   async loadAccountData(xrplAccount: string) {
@@ -635,11 +645,12 @@ export class BlackholeAccount implements OnInit, OnDestroy {
           this.snackBar.open("Transaction not successful!", null, {panelClass: 'snackbar-failed', duration: 3000, horizontalPosition: 'center', verticalPosition: 'top'});
         }
       }
-
-      this.loadingData = false;
+      
     } catch(err) {
      this.handleError(err)
     }
+
+    this.loadingData = false;
   }
 
   async disableMasterKeyForIssuer() {
@@ -676,10 +687,11 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         }
       }
 
-      this.loadingData = false;
     } catch(err) {
      this.handleError(err)
     }
+
+    this.loadingData = false;
   }
 
 
@@ -718,10 +730,97 @@ export class BlackholeAccount implements OnInit, OnDestroy {
         }
       }
 
-      this.loadingData = false;
     } catch(err) {
      this.handleError(err)
     }
+
+    this.loadingData = false;
+  }
+
+  async loadPaymentsAndNext() {
+    this.loadPayments(this.issuerAccount.trim());
+    this.moveNext();
+  }
+
+  async loadPayments(issuerAccount: string) {
+    try {
+      this.loadingData = true;
+
+      console.log("checking existing transactions")
+
+      //load account lines
+      let accountTransactions:any = {
+        command: "account_tx",
+        account: issuerAccount,
+        limit: 100
+      }
+
+      //console.log("starting to read account lines!")
+      console.log("accountTransactions: " + JSON.stringify(accountTransactions));
+
+      let accountTx = await this.xrplWebSocket.getWebsocketMessage('issuer-tx', accountTransactions, this.isTestMode);
+
+      console.log("accountTx: " + JSON.stringify(accountTx));
+
+      if(accountTx?.result?.transactions) {
+        
+        let transactions:any[] = accountTx?.result?.transactions;
+
+        let marker = accountTx.result.marker;
+
+        for(let i = 0; i < transactions.length; i++) {
+          //scanning transactions for previous payments
+          console.log("looping through transactions")
+          try {
+            let transaction = transactions[i];
+
+            console.log("tx " + i + " : " + JSON.stringify(transaction));
+
+            console.log("payment amount to check for: " + JSON.stringify(this.getPurchaseAmountXRP()*1000000).toString());
+
+            if(transaction?.tx?.TransactionType === 'Payment' && transaction?.tx?.Destination === 'rNixerUVPwrhxGDt4UooDu6FJ7zuofvjCF' && transaction?.tx?.Memos && transaction?.meta?.TransactionResult === "tesSUCCESS" && transaction?.meta?.delivered_amount === (this.getPurchaseAmountXRP()*1000000).toString()) {
+              //parse memos:
+              if(transaction.tx.Memos[1] && transaction.tx.Memos[1].Memo) {
+                let memoType = Buffer.from(transaction.tx.Memos[1].Memo.MemoType, 'hex').toString('utf8');
+                
+                console.log("memoType: " + JSON.stringify(memoType));
+
+                if(this.issuerAccount && memoType === 'Blackhole-Info') {
+                  let memoData = JSON.parse(Buffer.from(transaction.tx.Memos[1].Memo.MemoData, 'hex').toString('utf8'));
+
+                  console.log("memoData: " + JSON.stringify(memoData));
+
+                  if(memoData.account === this.issuerAccount.trim()) {
+                    this.paymentInitiated = true;
+                    this.paymentNotSuccessfull = false;
+                    console.log("PAYMENT FOUND!");
+                    break;
+                  }
+                }
+              }
+            }
+          } catch(err) {
+            //parse error, continue!
+          }
+        }
+
+        //console.log("marker: " + marker);
+        //console.log("LEDGER_INDEX : " + accountLines.result.ledger_index);
+
+      }
+    } catch(err) {
+      console.log("ERR LOADING ACC TX")
+      console.log(JSON.stringify(err));
+    }
+
+    this.loadingData = false;
+  }
+
+  getPurchaseAmountXRP(): number {
+    if(this.fixAmounts && this.fixAmounts["*"])
+      return parseInt(this.fixAmounts["*"]) / 1000000;
+    else
+      return 20;
   }
 
   getAvailableBalanceIssuer(): number {
@@ -745,21 +844,6 @@ export class BlackholeAccount implements OnInit, OnDestroy {
     }
   }
 
-  async handleOverlayEvent(event:any) {
-    try {
-      if(event && event.data) {
-        let eventData = JSON.parse(event.data);
-
-        if(eventData && eventData.method == "payloadResolved" && eventData.reason == "DECLINED") {
-            //user closed without signing
-            this.loadingData = false;
-        }
-      }
-    } catch(err) {
-      //ignore errors
-    }
-  }
-
   async loadFeeReserves() {
     let fee_request:any = {
       command: "ledger_entry",
@@ -773,6 +857,16 @@ export class BlackholeAccount implements OnInit, OnDestroy {
 
     //console.log("resolved accountReserve: " + this.accountReserve);
     //console.log("resolved ownerReserve: " + this.ownerReserve);
+  }
+
+  openTokenTrasher() {
+    if (typeof window.ReactNativeWebView !== 'undefined') {
+      //this.infoLabel = "opening sign request";
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        command: "openBrowser",
+        url: "https://xumm.app/detect/xapp:nixer.tokentrasher"
+      }));
+    }
   }
 
   moveNext() {

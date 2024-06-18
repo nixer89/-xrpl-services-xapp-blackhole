@@ -61,8 +61,9 @@
           </div>
         </div>
 
-        <mat-card *ngIf="!loadingData && validIssuer && hasTokenBalance" class="mat-card-red">
+        <mat-card *ngIf="!loadingData && validIssuer && hasTokenBalance" fxLayout="column" fxLayoutGap="0.5em" class="mat-card-red">
           <label>You still have some tokens in your account. We do not allow you to black hole the account. Please send the token to another account before you start to black hole this one.</label>
+          <label style="text-decoration: underline;" (click)="openTokenTrasher()">Alternatively, click here to get rid of them! (Token Trasher xApp)</label>
         </mat-card>
 
         <mat-card class="mat-card-orange" *ngIf="loadingData" fxLayout="row" fxLayoutAlign="start start" fxLayoutGap="0.5em">
@@ -112,7 +113,7 @@
           </mat-card>
 
           <div style="padding-top: 0.5em;" fxLayoutGap="0.5em">
-              <button mat-raised-button color="primary" (click)="moveNext()" [disabled]="!recipient_account_info || !issuer_account_info || !recipient_account_info.Account || loadingData || recipient_account_info.Account == issuer_account_info.Account">Next</button>
+              <button mat-raised-button color="primary" (click)="loadPaymentsAndNext()" [disabled]="!recipient_account_info || !issuer_account_info || !recipient_account_info.Account || loadingData || recipient_account_info.Account == issuer_account_info.Account">Next</button>
               <button mat-raised-button class="xumm-grey-background" (click)="moveBack()" [disabled]="loadingData">Back</button>
           </div>
       </mat-card>
