@@ -752,7 +752,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
       let accountTransactions:any = {
         command: "account_tx",
         account: issuerAccount,
-        limit: 100
+        limit: 1000
       }
 
       //console.log("starting to read account lines!")
