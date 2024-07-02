@@ -583,7 +583,7 @@ export class BlackholeAccount implements OnInit, OnDestroy {
             Account: this.getIssuer(),
             TransactionType: "Payment",
             Destination: this.recipient_account_info.Account,
-            Amount: this.getAvailableBalanceIssuer()*1000000+""
+            Amount: (this.getAvailableBalanceIssuer()*1000000).toFixed(0)
           },
           custom_meta: {
             instruction: "- Sending " + this.getAvailableBalanceIssuer() + " XRP to an account of your choice.\n\n- Please sign with the ISSUER account!"
